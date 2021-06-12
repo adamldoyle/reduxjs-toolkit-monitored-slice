@@ -21,7 +21,11 @@ A monitored slice automatically manages the lifecycle of provided data by tracki
 
 Multiple examples provided via Storybook
 
-1. `yarn storybook`
+- https://adamldoyle-reduxjs-toolkit-monitored-slice-storybook.netlify.app/
+
+OR
+
+- `yarn storybook`
 
 ## Development
 

@@ -267,6 +267,42 @@ function ComponentUsingSelectors({
   );
 }
 
+function ComponentUsingContext() {
+  const dispatch = useDispatch();
+  const Context = widgetsSlice.context.Context;
+  const ContextProvider = widgetsSlice.context.ContextProvider;
+  const factoryId = useSelector(selectedFactory);
+  const selectedWidgetId = useSelector(selectedWidget);
+
+  const changeFactory = () => {
+    const newFactoryId = (factoryId ?? 0) + 1;
+    dispatch(factorySlice.actions.selectFactory(newFactoryId));
+  };
+
+  const selectWidget = (widgetId: string) => {
+    dispatch(widgetsSlice.slice.actions.selectWidget(widgetId));
+  };
+
+  return (
+    <ContextProvider>
+      <Context.Consumer>
+        {({ data, loading, makeStale }) => (
+          <DisplayComponent
+            title="via context"
+            factoryId={factoryId}
+            changeFactory={changeFactory}
+            loading={loading}
+            makeStale={makeStale}
+            data={data}
+            selectedWidgetId={selectedWidgetId}
+            selectWidget={selectWidget}
+          />
+        )}
+      </Context.Consumer>
+    </ContextProvider>
+  );
+}
+
 export default {
   title: 'MonitoredSlice',
   argTypes: {},
@@ -292,3 +328,8 @@ export const UsingSelectors = UsingSelectorsTemplate.bind({});
 UsingSelectors.args = {
   monitorSlice: false,
 };
+
+const UsingContextTemplate: Story = () => <ComponentUsingContext />;
+
+export const UsingContext = UsingContextTemplate.bind({});
+UsingContext.args = {};

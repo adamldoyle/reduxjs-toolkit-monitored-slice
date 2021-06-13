@@ -6,7 +6,7 @@ import {
   SliceCaseReducers,
   createSelector,
 } from '@reduxjs/toolkit';
-import { waitFor } from '@testing-library/react';
+import { render, waitFor } from '@testing-library/react';
 import { renderHook } from '@testing-library/react-hooks';
 import { createMonitoredSlice, IMonitoredState } from './';
 
@@ -414,6 +414,163 @@ describe('createMonitoredSlice', () => {
           expect(rendered.result.current.data).toEqual([
             { id: 'value3', name: 'value4' },
           ])
+        );
+      });
+    });
+  });
+
+  describe('context', () => {
+    describe('ContextProvider', () => {
+      let renderedStore;
+      const renderMonitoredContext = (
+        loader = DEFAULT_LOADER,
+        loaderParamsSelector = null
+      ) => {
+        const { slice, context } = buildTestSlice(
+          undefined,
+          undefined,
+          undefined,
+          loader,
+          loaderParamsSelector
+        );
+        renderedStore = configureStore({
+          reducer: {
+            testSlice: slice.reducer,
+            otherSlice: otherSlice.reducer,
+          },
+        });
+        const contextCalls = jest.fn();
+        render(
+          <Provider store={renderedStore}>
+            <context.ContextProvider>
+              <context.Context.Consumer>
+                {(data) => {
+                  contextCalls(data);
+                  return null;
+                }}
+              </context.Context.Consumer>
+            </context.ContextProvider>
+          </Provider>
+        );
+        return contextCalls;
+      };
+
+      const waitForLoaded = async (contextCalls: jest.Mock) => {
+        await waitFor(() =>
+          expect(contextCalls).toBeCalledWith(
+            expect.objectContaining({ loading: false })
+          )
+        );
+      };
+
+      it('sets loading and returns initial data', () => {
+        const contextCalls = renderMonitoredContext();
+        expect(contextCalls).toBeCalledWith({
+          loading: true,
+          data: DEFAULT_INITIAL_DATA,
+          makeStale: expect.anything(),
+        });
+      });
+
+      it('loads and returns new data', async () => {
+        const loadedData = [
+          { id: 'id1', name: 'name1' },
+          { id: 'id2', name: 'name2' },
+        ];
+        const loader = jest.fn().mockResolvedValue(loadedData);
+        const contextCalls = renderMonitoredContext(loader);
+        await waitFor(() =>
+          expect(contextCalls).toBeCalledWith(
+            expect.objectContaining({ loading: false, data: loadedData })
+          )
+        );
+      });
+
+      it('supports marking data as stale to reload', async () => {
+        const loader = jest.fn().mockResolvedValue([]);
+        const contextCalls = renderMonitoredContext(loader);
+        await waitForLoaded(contextCalls);
+        const loadedData = [
+          { id: 'id1', name: 'name1' },
+          { id: 'id2', name: 'name2' },
+        ];
+        loader.mockResolvedValue(loadedData);
+        contextCalls.mock.calls[
+          contextCalls.mock.calls.length - 1
+        ][0].makeStale();
+        await waitFor(() =>
+          expect(contextCalls).toBeCalledWith(
+            expect.objectContaining({ data: loadedData })
+          )
+        );
+      });
+
+      it('passes null for params if no loader params selector configured', async () => {
+        const loader = jest.fn().mockResolvedValue([]);
+        const contextCalls = renderMonitoredContext(loader);
+        await waitForLoaded(contextCalls);
+        expect(loader).toBeCalledWith(null);
+      });
+
+      it('passes params if loader params selector configured', async () => {
+        const loader = jest.fn().mockResolvedValue([]);
+        const contextCalls = renderMonitoredContext(loader, selectParams);
+        await waitForLoaded(contextCalls);
+        expect(loader).toBeCalledWith(['value1', 'value2']);
+      });
+
+      it('automatically reloads data if params change', async () => {
+        const loader = jest.fn().mockImplementation((params) => {
+          return Promise.resolve([{ id: params[0], name: params[1] }]);
+        });
+        const contextCalls = renderMonitoredContext(loader, selectParams);
+        await waitFor(() =>
+          expect(contextCalls).toBeCalledWith(
+            expect.objectContaining({
+              data: [{ id: 'value1', name: 'value2' }],
+            })
+          )
+        );
+        expect(loader).toBeCalledWith(['value1', 'value2']);
+        jest.clearAllMocks();
+        renderedStore.dispatch(
+          otherSlice.actions.setParams({ param1: 'value3', param2: 'value4' })
+        );
+        await waitFor(() =>
+          expect(contextCalls).toBeCalledWith(
+            expect.objectContaining({
+              data: [{ id: 'value3', name: 'value4' }],
+            })
+          )
+        );
+        expect(loader).toBeCalledWith(['value3', 'value4']);
+      });
+
+      it('only stores loaded data if params still match', async () => {
+        const loader = jest.fn().mockImplementation((params) => {
+          if (params[0] === 'value1') {
+            // Dispatch new params in middle of loader for old params
+            renderedStore.dispatch(
+              otherSlice.actions.setParams({
+                param1: 'value3',
+                param2: 'value4',
+              })
+            );
+          }
+          return Promise.resolve([{ id: params[0], name: params[1] }]);
+        });
+        const contextCalls = renderMonitoredContext(loader, selectParams);
+        renderedStore.subscribe(() => {
+          expect(renderedStore.getState().testSlice.data).not.toEqual([
+            { id: 'value1', name: 'value2' },
+          ]);
+        });
+        await waitFor(() =>
+          expect(contextCalls).toBeCalledWith(
+            expect.objectContaining({
+              data: [{ id: 'value3', name: 'value4' }],
+            })
+          )
         );
       });
     });

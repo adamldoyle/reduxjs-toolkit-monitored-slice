@@ -1,4 +1,4 @@
-import { useEffect, useCallback } from 'react';
+import React, { useEffect, useCallback } from 'react';
 import {
   createSlice,
   createSelector,
@@ -66,6 +66,10 @@ export interface IUseMonitoredData<IDataType> {
   makeStale: () => void;
 }
 
+export interface ContextProviderProps {
+  children: React.ReactNode;
+}
+
 /**
  * Object returned when creating a monitored slice.
  */
@@ -113,9 +117,25 @@ export interface IMonitoredSlice<IRootState, IState, IDataType> {
    */
   hooks: {
     /**
-     * Monitors a slice. If nothing is actively using this hook for a slice, its data won't be loaded when stale.
+     * Monitors a slice.
+     * If neither the ContextProvider or useMonitoredData hook are used, the data won't be loaded when stale.
      */
     useMonitoredData: () => IUseMonitoredData<IDataType>;
+  };
+
+  /**
+   * Context components for monitoring data.
+   */
+  context: {
+    /**
+     * Context which provides monitored data information.
+     */
+    Context: React.Context<IUseMonitoredData<IDataType>>;
+    /**
+     * Context provider which also monitors a slice.
+     * If neither the ContextProvider or useMonitoredData hook are used, the data won't be loaded when stale.
+     */
+    ContextProvider: React.ComponentType;
   };
 }
 
@@ -266,9 +286,26 @@ export function createMonitoredSlice<
     };
   };
 
+  /**
+   * Context which provides data, loading flag, and makeStale function.
+   */
+  const Context = React.createContext<IUseMonitoredData<IDataType>>(undefined);
+
+  /**
+   * Context provider which provides monitoring for a slice as well as providing Context data to consumers.
+   * @param props Accepts children prop which it renders
+   * @returns ReactElement
+   */
+  const ContextProvider = ({ children }: ContextProviderProps): JSX.Element => {
+    const hookData = useMonitoredData();
+
+    return <Context.Provider value={hookData}>{children}</Context.Provider>;
+  };
+
   return {
     slice,
     selectors: { selectSlice, selectStale, selectLoading, selectData },
     hooks: { useMonitoredData },
+    context: { Context, ContextProvider },
   };
 }
